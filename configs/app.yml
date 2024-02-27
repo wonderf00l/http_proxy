@@ -1,0 +1,10 @@
+app:
+  server:
+    proto: http 
+    host: localhost
+    port: 8000
+  proxy:
+    proto: http 
+    host: localhost
+    port: 8080
+
