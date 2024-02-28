@@ -2,7 +2,6 @@ package http
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -32,18 +31,12 @@ func (h *HandlerHTTP) ProxyHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h *HandlerHTTP) tunnelHTTP(w http.ResponseWriter, req *http.Request) {
-	fmt.Println(req.RequestURI)
 	dstConn, err := net.DialTimeout("tcp", req.Host, dialTimeout)
 	if err != nil {
 		h.responseErr(w, req, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-
-	// b := &bytes.Buffer{}
-	// req.Write(b)
-	// fmt.Println(b.String())
-	// fmt.Printf("%+v\n", req)
 
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {

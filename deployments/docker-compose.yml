@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  app:
+    container_name: app
+    build: 
+      context: ./..
+      dockerfile: deployments/Dockerfile
+    environment:
+      - POSTGRES_HOST=hst
+    ports:
+    - 8080:8080
+    - 8000:8000
+
+volumes:
+  postgres_storage: {}
