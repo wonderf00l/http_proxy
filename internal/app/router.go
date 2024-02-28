@@ -5,6 +5,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	delivery "github.com/wonderf00l/http_proxy/internal/delivery/http"
+	"github.com/wonderf00l/http_proxy/internal/middleware"
+	"go.uber.org/zap"
 )
 
 // set api route
@@ -18,6 +20,9 @@ func NewRouter(h *delivery.HandlerHTTP) http.Handler {
 	return mux
 }
 
-func NewProxyRouter(h *delivery.HandlerHTTP) http.Handler {
-	return http.HandlerFunc(h.ProxyHTTP)
+func NewProxyRouter(h *delivery.HandlerHTTP, log *zap.SugaredLogger) http.Handler {
+	r := chi.NewMux()
+	r.Use(middleware.LoggingMW(log))
+	r.HandleFunc("/", http.HandlerFunc(h.DoProxy))
+	return r
 }

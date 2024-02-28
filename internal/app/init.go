@@ -22,11 +22,11 @@ func Init() (*zap.SugaredLogger, *configs.Configs, error) {
 		return nil, nil, &initErr{inner: fmt.Errorf("app cfg: %w", err)}
 	}
 
-	sConfig, err := configs.NewServerConfig(appCfg, configs.ServerKey)
+	sConfig, err := configs.NewServerConfig(appCfg, configs.ServerKey, false)
 	if err != nil {
 		return nil, nil, &initErr{inner: fmt.Errorf("srv cfg: %w", err)}
 	}
-	proxyConfig, err := configs.NewServerConfig(appCfg, configs.ProxyKey)
+	proxyConfig, err := configs.NewServerConfig(appCfg, configs.ProxyKey, true)
 	if err != nil {
 		return nil, nil, &initErr{inner: fmt.Errorf("proxy cfg: %w", err)}
 	}

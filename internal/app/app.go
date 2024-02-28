@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/wonderf00l/http_proxy/internal/configs"
 	delivery "github.com/wonderf00l/http_proxy/internal/delivery/http"
@@ -16,6 +17,10 @@ import (
 // run srv
 // shoutdown func
 
+var (
+	shutdownTimeout = 5 * time.Second
+)
+
 type runErr struct {
 	inner error
 }
@@ -27,23 +32,33 @@ func (e *runErr) Error() string {
 func Run(ctx context.Context, logger *zap.SugaredLogger, cfgs *configs.Configs) error {
 	h := delivery.NewHandler(logger, nil)
 
-	router, proxyRouter := NewRouter(h), NewProxyRouter(h)
-	server, proxy := NewServer(&cfgs.SrvCfg, router, logger), NewServer(&cfgs.ProxyCfg, router, logger)
+	router, proxyRouter := NewRouter(h), NewProxyRouter(h, logger)
+	server, proxy := NewServer(&cfgs.SrvCfg, router, logger), NewServer(&cfgs.ProxyCfg, proxyRouter, logger)
 
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
-	server.Run(router, wg)
+	if err := server.Run(wg); err != nil {
+		return err
+	}
 	wg.Add(1)
-	proxy.Run(proxyRouter, wg)
+	if err := proxy.Run(wg); err != nil {
+		return err
+	}
+
+	<-ctx.Done()
+	logger.Infoln("Shutting down gracefully")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
 
 	go func() {
-		if err := proxy.Shutdown(ctx); err != nil {
-			logger.Errorln("Shutdown proxy: ", err.Error())
+		if err := proxy.Shutdown(shutdownCtx); err != nil {
+			logger.Errorln("shutdown proxy: ", err.Error())
 		}
 	}()
-	if err := server.Shutdown(ctx); err != nil {
-		return &runErr{inner: fmt.Errorf("Shutdown api: %w", err)}
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return &runErr{inner: fmt.Errorf("shutdown api: %w", err)}
 	}
 
 	wg.Wait()

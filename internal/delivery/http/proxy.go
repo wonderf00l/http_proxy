@@ -1,75 +1,85 @@
 package http
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
-	"net/url"
+	"time"
 )
 
-// listen and serve for proxy
-// func proxyHTTPS or tunnelHTTP
+var (
+	headersToSkip = []string{"Proxy-Connection"}
+	dialTimeout   = 5 * time.Second
+)
 
 func (h *HandlerHTTP) ProxyHTTP(w http.ResponseWriter, req *http.Request) {
-	modified, err := modifiedRequest(req)
+	new, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
 	if err != nil {
 		h.responseErr(w, req, err)
 		return
 	}
+	cpyHeaders(new.Header, req.Header)
 
-	resp, err := http.DefaultClient.Do(modified)
+	resp, err := h.proxyClient.Do(new)
 	if err != nil {
 		h.responseErr(w, req, err)
 		return
 	}
 	defer resp.Body.Close()
-
 	io.Copy(w, resp.Body)
 }
 
-func modifiedRequest(r *http.Request) (*http.Request, error) {
-	r.Header = changeHeaders(r.Header)
-
-	var err error
-	if r.URL, err = modifyPath(r.URL); err != nil {
-		return nil, fmt.Errorf("modifying request: %w", err)
-	}
-
-	return r, nil
-}
-
-func changeHeaders(h http.Header) http.Header {
-	h.Del("Proxy-Connection")
-	return h
-}
-
-func modifyPath(path *url.URL) (*url.URL, error) {
-	relative := path.Path
-
-	newUrl, err := url.Parse(relative)
+func (h *HandlerHTTP) tunnelHTTP(w http.ResponseWriter, req *http.Request) {
+	fmt.Println(req.RequestURI)
+	dstConn, err := net.DialTimeout("tcp", req.Host, dialTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("change absolute URL with relative path: %w", err)
+		h.responseErr(w, req, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+
+	// b := &bytes.Buffer{}
+	// req.Write(b)
+	// fmt.Println(b.String())
+	// fmt.Printf("%+v\n", req)
+
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		h.responseErr(w, req, errors.New("hijacker isn't supported"))
+		return
 	}
 
-	return newUrl, nil
+	srcConn, _, err := hijacker.Hijack()
+	if err != nil {
+		h.responseErr(w, req, err)
+		return
+	}
+
+	go streamTCP(dstConn, srcConn)
+	go streamTCP(srcConn, dstConn)
 }
 
-// change all
-// make new req
-// make req
-// write resp to the client writer
+func streamTCP(destination io.WriteCloser, source io.ReadCloser) {
+	defer destination.Close()
+	defer source.Close()
+	io.Copy(destination, source)
+}
 
-// hijacker, ok := w.(http.Hijacker)
-// if !ok {
-// 	http.Error(w, "Hijacker is not supported", http.StatusInternalServerError)
-// }
+func cpyHeaders(dst, src http.Header) {
+	for key, values := range src {
+		if !shouldBeSkipped(key) {
+			dst[key] = values
+		}
+	}
+}
 
-// conn, buf, err := hijacker.Hijack()
-// buf.
-
-// resp, err := http.DefaultTransport.RoundTrip(req)
-// if err != nil {
-// 	responseError(w, err, p.logger)
-// }
-
-// defer resp.Body.Close()
+func shouldBeSkipped(key string) bool {
+	for _, h := range headersToSkip {
+		if key == h {
+			return true
+		}
+	}
+	return false
+}

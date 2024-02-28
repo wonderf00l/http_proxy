@@ -1,10 +1,12 @@
 app:
   server:
     proto: http 
-    host: localhost
+    host: 0.0.0.0
     port: 8000
   proxy:
-    proto: http 
-    host: localhost
+    proto: http
+    host: 0.0.0.0
     port: 8080
+    crtFile: certs/proxy.crt
+    keyFile: certs/proxy.key
 
