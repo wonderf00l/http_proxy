@@ -1,1 +1,1 @@
-# http_proxy
+# http(s)_proxy
